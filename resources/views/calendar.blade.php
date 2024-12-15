@@ -103,188 +103,208 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            var calendarEl = document.getElementById('calendar');
-            var tooltip; // Define the tooltip variable
-            var token = '6|SGC5zty5QvBdulgLPfacLE06nCXdGdOYqXPp8L4C'; // Set your token here
+    document.addEventListener('DOMContentLoaded', function () {
+    var calendarEl = document.getElementById('calendar');
+    var tooltip = null; // Define the tooltip variable
+    var token = '6|SGC5zty5QvBdulgLPfacLE06nCXdGdOYqXPp8L4C'; // Set your token here
+    var isDragging = false; // Flag to check if dragging is happening
 
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                selectable: true,
-                editable: true,
-                events: function(info, successCallback, failureCallback) {
+    // Function to remove tooltip
+    function removeTooltip() {
+        if (tooltip) {
+            tooltip.remove();
+            tooltip = null;
+        }
+    }
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        selectable: true,
+        editable: true,
+        events: function(info, successCallback, failureCallback) {
+            fetch('/api/events', {
+                method: 'GET',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+            })
+            .then(response => response.json())
+            .then(data => successCallback(data))
+            .catch(error => failureCallback(error));
+        },
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+
+        // Prevent tooltip during drag operations
+        eventMouseEnter: function (info) {
+            // Only show tooltip if not dragging and not an ongoing drag operation
+            if (!isDragging) {
+                removeTooltip(); // Remove any existing tooltip first
+
+                tooltip = document.createElement('div');
+                tooltip.classList.add('tooltip');
+                tooltip.innerHTML = 
+                    `Title: ${info.event.title}<br>` +
+                    `Description: ${info.event.extendedProps.description || 'No description'}<br>` +
+                    `Start: ${info.event.start.toISOString().split('T')[0]} ${info.event.start.toISOString().split('T')[1].substring(0, 5)}<br>` +
+                    `End: ${info.event.end.toISOString().split('T')[0]} ${info.event.end.toISOString().split('T')[1].substring(0, 5)}`;
+                
+                document.body.appendChild(tooltip);
+                tooltip.style.left = `${info.jsEvent.pageX + 10}px`;
+                tooltip.style.top = `${info.jsEvent.pageY + 10}px`;
+
+                setTimeout(() => {
+                    if (tooltip) {
+                        tooltip.classList.add('visible');
+                    }
+                }, 50);
+            }
+        },
+
+        // Hide and remove tooltip when mouse leaves
+        eventMouseLeave: function () {
+            if (tooltip) {
+                tooltip.classList.remove('visible');
+                setTimeout(removeTooltip, 200);
+            }
+        },
+
+        // Explicitly manage dragging state
+        eventDragStart: function() {
+            isDragging = true;
+            removeTooltip(); // Ensure tooltip is removed
+        },
+
+        eventDragStop: function() {
+            isDragging = false;
+            removeTooltip(); // Extra safety to remove any lingering tooltip
+        },
+
+        // Prevent tooltip during drag/drop
+        eventDrop: function (info) {
+            isDragging = false;
+            removeTooltip();
+
+            fetch(`/api/events/${info.event.id}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    title: info.event.title,
+                    start: info.event.startStr,
+                    end: info.event.endStr,
+                    description: info.event.extendedProps.description
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                calendar.refetchEvents();
+            })
+            .catch(error => console.error('Error:', error));
+        },
+
+        // Rest of the existing event handling code remains the same...
+        select: function (info) {
+            $('#eventForm')[0].reset();
+            $('#deleteEvent').hide();
+            $('#eventModal').modal('show');
+            $('#startDate').val(info.startStr);
+            $('#endDate').val(info.endStr);
+
+            $('#eventForm').off('submit').on('submit', function (e) {
+                e.preventDefault();
+                var title = $('#title').val();
+                var start = $('#startDate').val();
+                var end = $('#endDate').val();
+                var description = $('#description').val();
+
+                if (title && start && end) {
                     fetch('/api/events', {
-                        method: 'GET',
+                        method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`,
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                         },
-                    })
-                    .then(response => response.json())
-                    .then(data => successCallback(data))
-                    .catch(error => failureCallback(error));
-                },
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-
-                // Create new event
-                select: function (info) {
-                    $('#eventForm')[0].reset();  // Reset form fields
-                    $('#deleteEvent').hide();    // Hide delete button
-                    $('#eventModal').modal('show');
-                    $('#startDate').val(info.startStr);
-                    $('#endDate').val(info.endStr);
-
-                    // When saving a new event
-                    $('#eventForm').off('submit').on('submit', function (e) {
-                        e.preventDefault();
-                        var title = $('#title').val();
-                        var start = $('#startDate').val();
-                        var end = $('#endDate').val();
-                        var description = $('#description').val();
-
-                        if (title && start && end) {
-                            fetch('/api/events', {
-                                method: 'POST',
-                                headers: { 
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`,
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                                },
-                                body: JSON.stringify({ title, start, end, description })
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                calendar.refetchEvents();
-                                $('#eventModal').modal('hide');
-                            })
-                            .catch(error => console.error('Error:', error));
-                        }
-                    });
-                },
-
-                // Update event on drag/drop
-                eventDrop: function (info) {
-                    fetch(`/api/events/${info.event.id}`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                        },
-                        body: JSON.stringify({
-                            title: info.event.title,
-                            start: info.event.startStr,
-                            end: info.event.endStr
-                        }),
+                        body: JSON.stringify({ title, start, end, description })
                     })
                     .then(response => response.json())
                     .then(data => {
                         calendar.refetchEvents();
+                        $('#eventModal').modal('hide');
                     })
                     .catch(error => console.error('Error:', error));
-                },
-
-                // Edit or delete event on click
-                eventClick: function (info) {
-                    $('#title').val(info.event.title);
-                    $('#startDate').val(info.event.start.toISOString().split('T')[0] + 'T' + info.event.start.toISOString().split('T')[1].substring(0, 5));
-                    $('#endDate').val(info.event.end.toISOString().split('T')[0] + 'T' + info.event.end.toISOString().split('T')[1].substring(0, 5));
-                    $('#description').val(info.event.extendedProps.description || '');
-
-                    $('#eventModal').modal('show');
-                    $('#deleteEvent').show();  // Show delete button
-
-                    // Handle form submission for editing
-                    $('#eventForm').off('submit').on('submit', function (e) {
-                        e.preventDefault();
-                        var newTitle = $('#title').val();
-                        var newStart = $('#startDate').val();
-                        var newEnd = $('#endDate').val();
-                        var newDescription = $('#description').val();
-
-                        fetch(`/api/events/${info.event.id}`, {
-                            method: 'PUT',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`,
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                            },
-                            body: JSON.stringify({ title: newTitle, start: newStart, end: newEnd, description: newDescription })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            info.event.setProp('title', newTitle);
-                            info.event.setStart(newStart);
-                            info.event.setEnd(newEnd);
-                            info.event.setExtendedProp('description', newDescription);
-                            $('#eventModal').modal('hide');
-                        })
-                        .catch(error => console.error('Error:', error));
-                    });
-
-                    // Delete event
-                    $('#deleteEvent').off('click').on('click', function () {
-                        if (confirm('Are you sure you want to delete this event?')) {
-                            fetch(`/api/events/${info.event.id}`, {
-                                method: 'DELETE',
-                                headers: { 
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`,
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                                },
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                calendar.refetchEvents();
-                                $('#eventModal').modal('hide');
-                            })
-                            .catch(error => console.error('Error:', error));
-                        }
-                    });
-                },
-
-                // Show tooltip on hover over event
-                eventMouseEnter: function (info) {
-                    // Create tooltip div
-                    tooltip = document.createElement('div');
-                    tooltip.className = 'tooltip';
-                    tooltip.innerText = `
-                        Title: ${info.event.title}
-                        Start: ${info.event.start.toISOString().split('T')[0]} ${info.event.start.toISOString().split('T')[1].substring(0, 5)}
-                        End: ${info.event.end.toISOString().split('T')[0]} ${info.event.end.toISOString().split('T')[1].substring(0, 5)}
-                        ${info.event.extendedProps.description ? `\nDescription: ${info.event.extendedProps.description}` : ''}`;
-                    document.body.appendChild(tooltip);
-
-                    // Position the tooltip near the event
-                    var rect = info.el.getBoundingClientRect();
-                    tooltip.style.left = rect.left + 'px';
-                    tooltip.style.top = rect.top - tooltip.offsetHeight - 5 + 'px';
-
-                    // Show the tooltip
-                    setTimeout(function() {
-                        tooltip.classList.add('visible');
-                    }, 50);
-                },
-
-                // Remove tooltip on mouse leave
-                eventMouseLeave: function (info) {
-                    if (tooltip) {
-                        tooltip.classList.remove('visible');
-                        setTimeout(function () {
-                            tooltip.remove();
-                        }, 200);
-                    }
                 }
             });
+        },
 
-            calendar.render();
-        });
+        eventClick: function (info) {
+            $('#title').val(info.event.title);
+            $('#startDate').val(info.event.start.toISOString().split('T')[0] + 'T' + info.event.start.toISOString().split('T')[1].substring(0, 5));
+            $('#endDate').val(info.event.end.toISOString().split('T')[0] + 'T' + info.event.end.toISOString().split('T')[1].substring(0, 5));
+            $('#description').val(info.event.extendedProps.description || '');
+
+            $('#eventModal').modal('show');
+            $('#deleteEvent').show();
+
+            $('#eventForm').off('submit').on('submit', function (e) {
+                e.preventDefault();
+                var newTitle = $('#title').val();
+                var newStart = $('#startDate').val();
+                var newEnd = $('#endDate').val();
+                var newDescription = $('#description').val();
+
+                fetch(`/api/events/${info.event.id}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({ title: newTitle, start: newStart, end: newEnd, description: newDescription })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    info.event.setProp('title', newTitle);
+                    info.event.setStart(newStart);
+                    info.event.setEnd(newEnd);
+                    info.event.setExtendedProp('description', newDescription);
+                    $('#eventModal').modal('hide');
+                })
+                .catch(error => console.error('Error:', error));
+            });
+
+            $('#deleteEvent').off('click').on('click', function () {
+                if (confirm('Are you sure you want to delete this event?')) {
+                    fetch(`/api/events/${info.event.id}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        info.event.remove();
+                        $('#eventModal').modal('hide');
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+            });
+        },
+    });
+
+    calendar.render();
+});
     </script>
-
 </body>
 </html>
