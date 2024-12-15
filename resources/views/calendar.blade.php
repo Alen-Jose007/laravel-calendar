@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Laravel Calendar Application</title>
     
     <!-- FullCalendar CSS -->
@@ -105,7 +106,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             var calendarEl = document.getElementById('calendar');
             var tooltip; // Define the tooltip variable
-            var token = '1|pR89AH2DtHhv7eub3SPC88mbpq7akLFaQl4zX9wZ'; // Set your token here
+            var token = '6|SGC5zty5QvBdulgLPfacLE06nCXdGdOYqXPp8L4C'; // Set your token here
 
             var calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
@@ -114,10 +115,11 @@
                 events: function(info, successCallback, failureCallback) {
                     fetch('/api/events', {
                         method: 'GET',
-                        headers: {
+                        headers: { 
+                            'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
                     })
                     .then(response => response.json())
                     .then(data => successCallback(data))
@@ -150,7 +152,8 @@
                                 method: 'POST',
                                 headers: { 
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
+                                    'Authorization': `Bearer ${token}`,
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                                 },
                                 body: JSON.stringify({ title, start, end, description })
                             })
@@ -170,7 +173,8 @@
                         method: 'PUT',
                         headers: { 
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
+                            'Authorization': `Bearer ${token}`,
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                         },
                         body: JSON.stringify({
                             title: info.event.title,
@@ -207,7 +211,8 @@
                             method: 'PUT',
                             headers: { 
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
+                                'Authorization': `Bearer ${token}`,
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                             },
                             body: JSON.stringify({ title: newTitle, start: newStart, end: newEnd, description: newDescription })
                         })
@@ -228,8 +233,10 @@
                             fetch(`/api/events/${info.event.id}`, {
                                 method: 'DELETE',
                                 headers: { 
-                                    'Authorization': `Bearer ${token}`
-                                }
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`,
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                                },
                             })
                             .then(response => response.json())
                             .then(data => {
